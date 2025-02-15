@@ -5,7 +5,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import ListView, ListItem, Label
 from scanner import scan_network
-from database import is_registered
+from database import is_registered, add_device, remove_device
 import sys
 
 class DeviceDetails(Static):
@@ -48,6 +48,7 @@ class NetworkScannerApp(App):
         Binding("ctrl+s", "show_sort", "Sort Data"),
         Binding("up", "move_up", "Move Up"),
         Binding("down", "move_down", "Move Down"),
+        Binding("enter", "toggle_device", "Toggle Registration"),
         *App.BINDINGS
     ]
 
@@ -70,7 +71,10 @@ class NetworkScannerApp(App):
         try:
             table = self.query_one("#device_table", DataTable)
             table.clear()
-            table.add_columns("Status", "IP Address", "MAC Address", "Vendor")
+            if not table.columns:
+                table.add_columns("Status", "IP Address", "MAC Address", "Vendor")
+            else:
+                table.clear()
             self.current_devices = scan_network(self.interface)
             for ip, mac, vendor in self.current_devices:
                 status = "✅" if is_registered(mac) else "❌"
@@ -108,7 +112,6 @@ class NetworkScannerApp(App):
         try:
             table = self.query_one("#device_table", DataTable)
             table.clear()
-            table.add_columns("Status", "IP Address", "MAC Address", "Vendor")
             for ip, mac, vendor in sorted_devices:
                 status = "✅" if is_registered(mac) else "❌"
                 table.add_row(status, ip, mac, vendor)
@@ -132,3 +135,19 @@ class NetworkScannerApp(App):
         if column in index:
             sorted_devices = sorted(self.current_devices, key=lambda x: x[index[column]])
             self.update_table_with_sorted_data(sorted_devices)
+
+    def action_toggle_device(self) -> None:
+        """Basculer l'enregistrement d'un appareil"""
+        if not self.current_devices or self.selected_row >= len(self.current_devices):
+            return
+
+        device = self.current_devices[self.selected_row]
+        ip, mac, vendor = device
+
+        if is_registered(mac):
+            remove_device(mac)
+        else:
+            add_device(ip, mac, vendor)
+
+        # Rafraîchir l'affichage
+        self.refresh_table()
