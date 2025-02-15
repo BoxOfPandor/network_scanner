@@ -21,3 +21,23 @@ def is_registered(mac):
     result = cursor.fetchone()
     conn.close()
     return result is not None
+    
+def add_device(ip, mac, vendor):
+    conn = sqlite3.connect("devices.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO devices (ip, mac, vendor) VALUES (?, ?, ?)", 
+                      (ip, mac, vendor))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def remove_device(mac):
+    conn = sqlite3.connect("devices.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM devices WHERE mac = ?", (mac,))
+    conn.commit()
+    conn.close()
