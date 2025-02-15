@@ -1,28 +1,56 @@
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll
-from textual.widgets import Header, Footer, DataTable, Static
+from textual.containers import VerticalScroll, Vertical
+from textual.widgets import Header, Footer, DataTable, Static, Input, Button
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import ListView, ListItem, Label
 from scanner import scan_network
-from database import is_registered, add_device, remove_device
+from database import is_registered, add_device, remove_device, get_device_name
 import sys
+
+class NameInputScreen(Screen):
+    """Écran pour saisir le nom d'un appareil"""
+
+    def __init__(self, device_data):
+        super().__init__()
+        self.device_data = device_data
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Enter device name:", id="prompt")
+            yield Input(placeholder="Device name", id="name_input")
+            yield Button("Save", id="save_button")
+            yield Button("Cancel", id="cancel_button")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save_button":
+            name_input = self.query_one("#name_input", Input)
+            ip, mac, vendor = self.device_data
+            name = name_input.value.strip()
+            if name:
+                add_device(ip, mac, vendor, name)
+            else:
+                add_device(ip, mac, vendor)
+        self.app.pop_screen()
+        self.app.refresh_table()
+
+    def on_key(self, event) -> None:
+        if event.key == "escape":
+            self.app.pop_screen()
 
 class DeviceDetails(Static):
     """Widget pour afficher les détails d'un appareil"""
     
-    def __init__(self, **kwargs):  # Ajout de **kwargs pour accepter l'argument id
-        super().__init__(**kwargs)  # Passage de kwargs au parent
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.styles.background_color = "blue"
         self.styles.padding = (1, 2)
 
     def update_details(self, device_data):
         if device_data:
             ip, mac, vendor = device_data
-            self.update(f"""IP Address: {ip}
-MAC Address: {mac}
-Vendor: {vendor}
-Status: {"Registered" if is_registered(mac) else "Unregistered"}""")
+            name = get_device_name(mac) or "Not set"
+            self.update(f"""Device Name: {name}\nIP Address: {ip}\nMAC Address: {mac}\nVendor: {vendor}\nStatus: {"Registered" if is_registered(mac) else "Unregistered"}""")
         else:
             self.update("No device selected")
 
@@ -140,14 +168,13 @@ class NetworkScannerApp(App):
         """Basculer l'enregistrement d'un appareil"""
         if not self.current_devices or self.selected_row >= len(self.current_devices):
             return
-
+    
         device = self.current_devices[self.selected_row]
         ip, mac, vendor = device
-
+    
         if is_registered(mac):
             remove_device(mac)
+            self.refresh_table()
         else:
-            add_device(ip, mac, vendor)
-
-        # Rafraîchir l'affichage
-        self.refresh_table()
+            # Afficher l'écran de saisie du nom
+            self.push_screen(NameInputScreen(device))
